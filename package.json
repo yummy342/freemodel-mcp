@@ -1,0 +1,51 @@
+{
+  "name": "freemodel-mcp",
+  "version": "1.0.0",
+  "description": "Smart model router for Claude Code — tier-scored, task-matched routing across 25+ platforms and 982 models. Knows which model is good at what.",
+  "main": "server.js",
+  "bin": {
+    "freemodel-mcp": "server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "freemodel",
+    "llm-router",
+    "model-router",
+    "multi-model",
+    "multi-provider",
+    "tier-routing",
+    "task-classification",
+    "benchmark",
+    "model-scoring",
+    "claude-code",
+    "deepseek",
+    "qwen",
+    "model-context-protocol",
+    "smart-routing",
+    "cost-aware"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yummy342/freemodel-mcp.git"
+  },
+  "homepage": "https://github.com/yummy342/freemodel-mcp",
+  "bugs": {
+    "url": "https://github.com/yummy342/freemodel-mcp/issues"
+  },
+  "files": [
+    "server.js",
+    "skill.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
