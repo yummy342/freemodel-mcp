@@ -1,7 +1,7 @@
 {
   "name": "freemodel-mcp",
   "version": "1.0.0",
-  "description": "Smart model router for Claude Code — tier-scored, task-matched routing across 25+ platforms and 982 models. Knows which model is good at what.",
+  "description": "Use the best model for every task — automatically. Multi-provider LLM router for Claude Code. Picks the right model based on what you are doing: coding, writing, reasoning. 25+ platforms (DeepSeek, Qwen, GLM, Gemini, Claude, GPT), one API key. Save 40-70% vs always using Claude.",
   "main": "server.js",
   "bin": {
     "freemodel-mcp": "server.js"
@@ -13,21 +13,30 @@
   "keywords": [
     "mcp",
     "mcp-server",
-    "freemodel",
-    "llm-router",
+    "claude-code",
     "model-router",
+    "llm-router",
     "multi-model",
     "multi-provider",
-    "tier-routing",
-    "task-classification",
-    "benchmark",
-    "model-scoring",
-    "claude-code",
+    "free",
+    "save-money",
+    "smart-routing",
     "deepseek",
     "qwen",
+    "glm",
+    "gemini",
+    "claude",
     "model-context-protocol",
-    "smart-routing",
-    "cost-aware"
+    "task-routing",
+    "tier-routing",
+    "benchmark",
+    "coding",
+    "reasoning",
+    "writing",
+    "cost-aware",
+    "budget",
+    "cheap",
+    "free-model"
   ],
   "license": "MIT",
   "repository": {

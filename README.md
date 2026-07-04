@@ -1,12 +1,12 @@
 # FreeModel MCP
 
-**Knows which model is good at what. Proves it with data.**
-
-One MCP server. 25+ platforms. 982 models. Tier-scored, task-matched, price-aware routing — all backed by public benchmark data.
+**Stop paying Claude prices for every task. Route coding to DeepSeek, reasoning to Qwen, writing to Gemini — automatically. One API key, 25+ platforms, the right model every time.**
 
 ```bash
 npx freemodel-mcp
 ```
+
+FreeModel is a **model router for Claude Code**. It looks at what you're doing — writing code, analyzing data, translating text — and picks the best model for that specific task. Not just the cheapest. Not just the most popular. The one that actually scores highest on the relevant benchmarks.
 
 ---
 
