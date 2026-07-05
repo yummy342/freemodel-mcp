@@ -1,0 +1,60 @@
+{
+  "name": "freemodel-mcp",
+  "version": "1.0.0",
+  "description": "Use the best model for every task — automatically. Multi-provider LLM router for Claude Code. Picks the right model based on what you are doing: coding, writing, reasoning. 25+ platforms (DeepSeek, Qwen, GLM, Gemini, Claude, GPT), one API key. Save 40-70% vs always using Claude.",
+  "main": "server.js",
+  "bin": {
+    "freemodel-mcp": "server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "claude-code",
+    "model-router",
+    "llm-router",
+    "multi-model",
+    "multi-provider",
+    "free",
+    "save-money",
+    "smart-routing",
+    "deepseek",
+    "qwen",
+    "glm",
+    "gemini",
+    "claude",
+    "model-context-protocol",
+    "task-routing",
+    "tier-routing",
+    "benchmark",
+    "coding",
+    "reasoning",
+    "writing",
+    "cost-aware",
+    "budget",
+    "cheap",
+    "free-model"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yummy342/freemodel-mcp.git"
+  },
+  "homepage": "https://github.com/yummy342/freemodel-mcp",
+  "bugs": {
+    "url": "https://github.com/yummy342/freemodel-mcp/issues"
+  },
+  "files": [
+    "server.js",
+    "skill.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
