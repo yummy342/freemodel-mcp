@@ -1,6 +1,9 @@
 ---
 name: freemodel
 description: Smart AI model routing — auto-detect task type, recommend best model across 25+ platforms, semi-automatic switching with user consent. Uses your own API keys with zero platform markup.
+metadata:
+  type: agent-skill
+  version: "2.1.0"
 ---
 
 # FreeModel — Smart Model Router for Claude Code
@@ -745,7 +748,7 @@ Failed: [list if any]
     "freemodel": {
       "command": "node",
       "args": ["server.js"],
-      "cwd": "C:/project/freemodel/freemodel-mcp",
+      "cwd": "/path/to/freemodel-mcp",
       "env": {
         "FREEMODEL_KEY": "sk-your-key",
         "FREEMODEL_API": "https://model.leyijian.com/api/gateway"
