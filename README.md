@@ -89,7 +89,9 @@ Efficiency ──── speed, throughput, cost
 
 ## Quick start
 
-### Option 1: npx (recommended)
+Get a key at [model.leyijian.com](https://model.leyijian.com) → Settings → API Keys.
+
+### Option 1: npx (Claude Code, recommended)
 
 Add to `~/.claude/mcp.json`:
 
@@ -107,9 +109,16 @@ Add to `~/.claude/mcp.json`:
 }
 ```
 
-Get a key at [model.leyijian.com](https://model.leyijian.com) → Settings → API Keys.
+### Option 2: Codex CLI
 
-### Option 2: git clone
+Set environment variables or configure in `~/.codex/config.toml`:
+
+```
+OPENAI_BASE_URL = https://model.leyijian.com/v1
+OPENAI_API_KEY  = sk-your-key
+```
+
+### Option 3: git clone (Claude Code)
 
 ```bash
 git clone https://github.com/yummy342/freemodel-mcp.git
