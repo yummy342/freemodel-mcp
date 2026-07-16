@@ -270,8 +270,28 @@ server.registerTool(
   }
 );
 
+// ── Skill auto-install ──
+function installSkill() {
+  const os = require('os');
+  const skillDir = path.join(os.homedir(), '.claude', 'skills', 'freemodel');
+  const skillFile = path.join(skillDir, 'SKILL.md');
+  if (fs.existsSync(skillFile)) return;  // already installed
+
+  const src = path.join(__dirname, 'skill.md');
+  if (!fs.existsSync(src)) return;  // bundled skill.md not found
+
+  try {
+    fs.mkdirSync(skillDir, { recursive: true });
+    fs.copyFileSync(src, skillFile);
+    process.stderr.write('[freemodel] Skill installed: ' + skillFile + '\n');
+  } catch (e) {
+    // silent — permission issues or read-only fs should not block MCP startup
+  }
+}
+
 // ── Start ──
 async function main() {
+  installSkill();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
