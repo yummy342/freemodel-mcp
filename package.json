@@ -1,6 +1,6 @@
 {
   "name": "freemodel-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Use the best model for every task — automatically. Multi-provider LLM router for Claude Code. Picks the right model based on what you are doing: coding, writing, reasoning. 25+ platforms (DeepSeek, Qwen, GLM, Gemini, Claude, GPT), one API key. Save 40-70% vs always using Claude.",
   "main": "server.js",
   "bin": {
