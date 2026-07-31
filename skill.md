@@ -401,42 +401,34 @@ If MCP tools don't respond:
 
 ### R19: 任务完成自动保存记忆到 mcshared 知识图谱
 
-每次完成有意义的工作后，自动写入 mcshared 知识图谱。不需要用户说"保存"。
+每次完成有意义的工作后，调用 `mcshared_track` MCP 工具写入。不需要用户说"保存"。
 
 **触发**: 完成代码修改 / 部署 / 修复bug / 架构决策
 **不触发**: 纯读文件、微调迭代、闲聊
 
 **方式（优先级递减）**:
 ```
-1. POST https://model.leyijian.com/mc-shared/api/projects/$MC_PROJECT_ID/knowledge/track
-   ?key=$MC_UNIFIED_KEY
-   &description=一句话描述做了什么
-   &files=changed/file1,changed/file2
-   &outcome=done
-   （3s 超时，files 最多 3 个文件）
-   $MC_PROJECT_ID 从环境变量取，默认 "freemodel"
-
-2. 不可用 → 静默跳过
+1. mcshared_track({description, files, outcome})  — MCP 工具（推荐）
+2. 不可用 → Bash: curl -s --max-time 3 -X POST "...track?..."
+3. 都不通 → 静默跳过
 ```
-- `$MC_UNIFIED_KEY` = 和 `FREEMODEL_KEY` 同一把统一 key
-- `$MC_PROJECT_ID` = 项目标识（freemodel / patentman / wulinzhi 等），默认 `freemodel`
-- outcome: "done" | "blocked" | "in_progress"
+- `files` 最多 3 个文件
+- `outcome`: "done" | "blocked" | "in_progress"
 
 **输出**: "🧠 已自动保存: [描述]"（API 不可用时静默跳过）
 
 ### R22: 任务前自动召回知识图谱记忆
 
-**每次新任务前，自动搜索 mcshared 知识图谱。** 不需要用户说"回忆"。这是路由准备工作，不违反 R1。
+**每次新任务前，调用 `mcshared_search` MCP 工具搜索。** 不需要用户说"回忆"。
 
 **触发**: 新任务（非 R6 迭代）、任务切换模块、会话首任务
 **不触发**: R6 迭代（"改一下"/"继续"/"下一步"）、纯闲聊、L3/L4 降级
 
 **执行**:
-1. 从任务描述提取 2-5 个关键词（项目名、技术栈、模块、功能）
-2. `GET https://model.leyijian.com/mc-shared/api/projects/$MC_PROJECT_ID/knowledge/recall?key=$MC_UNIFIED_KEY&query=<关键词>&k=5`（3s 超时）
-   $MC_PROJECT_ID 从环境变量取，默认 "freemodel"
-3. 有结果 → 输出 "📚 相关记忆已加载: [desc1] | [desc2]"（最多 3 行）→ 将记忆内容注入 Context Pack 的 `[CONTEXT]` 段
-4. 无结果/超时 → 静默跳过，不阻塞任务
+1. 从任务描述提取 2-5 个关键词
+2. `mcshared_search({query: "关键词", k: 5})` — MCP 工具（推荐）；不可用 → Bash curl fallback
+3. 有结果 → 输出 "📚 相关记忆已加载: [desc1] | [desc2]"（最多 3 行）
+4. 无结果/超时 → 静默跳过
 
 **关键词提取参考**:
 | 用户任务 | 关键词 |
@@ -474,7 +466,7 @@ If you find yourself thinking any of these, STOP:
 
 **This is NOT optional. This is a HARD requirement, same level as R0/R1.**
 
-Before outputting ANY "done", "完成", "好了", "全部完成" or equivalent completion message, you MUST call the track API. No exceptions. No "this was too small to track." No "I'll do it later."
+Before outputting ANY "done", "完成", "好了", "全部完成" or equivalent completion message, you MUST call `mcshared_track`. No exceptions. No "this was too small to track." No "I'll do it later."
 
 ```
 触发条件（满足任一即必须 track）:
@@ -490,7 +482,8 @@ Before outputting ANY "done", "完成", "好了", "全部完成" or equivalent c
   - 纯闲聊
 
 执行:
-  Bash: curl -s --max-time 3 -X POST "https://model.leyijian.com/mc-shared/api/projects/freemodel/knowledge/track?key=sk-d104cfb82ee2d9b2671c204c3e159d0a4602a9216c3c1ac5&description=<一句话>&files=<最多3个文件>&outcome=done"
+  MCP: mcshared_track({description: "一句话", files: "最多3个文件", outcome: "done"})
+  Fallback: Bash curl POST ...track?key=...&description=...&outcome=done
   
 输出: "🧠 已自动保存: <描述>"
 失败: 静默跳过（API 不可用不阻塞任务）
