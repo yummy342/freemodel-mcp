@@ -1,7 +1,7 @@
 {
   "name": "freemodel-mcp",
-  "version": "1.0.0",
-  "description": "Use the best model for every task — automatically. Multi-provider LLM router for Claude Code. Picks the right model based on what you are doing: coding, writing, reasoning. 25+ platforms (DeepSeek, Qwen, GLM, Gemini, Claude, GPT), one API key. Save 40-70% vs always using Claude.",
+  "version": "1.0.5",
+  "description": "Task-aware model router for Claude Code: pick the model by what the task is, not by price. Routes across the providers attached to your FreeModel account, with one API key.",
   "main": "server.js",
   "bin": {
     "freemodel-mcp": "server.js"
@@ -43,7 +43,7 @@
     "type": "git",
     "url": "git+https://github.com/yummy342/freemodel-mcp.git"
   },
-  "homepage": "https://github.com/yummy342/freemodel-mcp",
+  "homepage": "https://freemodel.online/",
   "bugs": {
     "url": "https://github.com/yummy342/freemodel-mcp/issues"
   },

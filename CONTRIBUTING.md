@@ -27,7 +27,7 @@ The MCP server is a single file (`server.js`). Test locally by adding it to your
       "args": ["/absolute/path/to/freemodel-mcp/server.js"],
       "env": {
         "FREEMODEL_KEY": "sk-your-key",
-        "FREEMODEL_API": "https://model.leyijian.com/api/gateway"
+        "FREEMODEL_API": "https://freemodel.online/api/gateway"
       }
     }
   }

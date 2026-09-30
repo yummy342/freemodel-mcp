@@ -26,7 +26,7 @@ Other routers:                FreeModel:
   at same complexity            on this task type's benchmarks
 ```
 
-The difference is data. FreeModel scores every model across six dimensions (Code, Knowledge, Math, Instruction, Safety, Efficiency) using 18 public benchmarks — LiveCodeBench, MMLU-Pro, MATH-500, IFEval, SimpleQA, and more. The scores are public at [model.leyijian.com/classification.html](https://model.leyijian.com/classification.html).
+The difference is data. FreeModel scores every model across six dimensions (Code, Knowledge, Math, Instruction, Safety, Efficiency) using 18 public benchmarks — LiveCodeBench, MMLU-Pro, MATH-500, IFEval, SimpleQA, and more. The live model list this router reads is public and needs no key: `GET https://freemodel.online/v1/models`.
 
 ---
 
@@ -41,7 +41,7 @@ The difference is data. FreeModel scores every model across six dimensions (Code
 | Tier system | no | no | no | **L1–L5, public rubric** |
 | Subscription routing | no | no | no | **yes, auto-prioritizes paid subs** |
 | Pricing | static yaml | static | static | **live API prices** |
-| Data transparency | N/A | N/A | N/A | **public classification page** |
+| Data transparency | N/A | N/A | N/A | **public model list** |
 
 ---
 
@@ -83,13 +83,15 @@ Safety ──────── SimpleQA, TruthfulQA
 Efficiency ──── speed, throughput, cost
 ```
 
-18 data sources, 6 dimensions, all public.
+18 data sources, 6 dimensions.
 
 ---
 
 ## Quick start
 
-### Option 1: npx (recommended)
+Get a key at [freemodel.online](https://freemodel.online/console) → API keys.
+
+### Option 1: npx (Claude Code, recommended)
 
 Add to `~/.claude/mcp.json`:
 
@@ -107,9 +109,16 @@ Add to `~/.claude/mcp.json`:
 }
 ```
 
-Get a key at [model.leyijian.com](https://model.leyijian.com) → Settings → API Keys.
+### Option 2: Codex CLI
 
-### Option 2: git clone
+Set environment variables or configure in `~/.codex/config.toml`:
+
+```
+OPENAI_BASE_URL = https://freemodel.online/v1
+OPENAI_API_KEY  = sk-your-key
+```
+
+### Option 3: git clone (Claude Code)
 
 ```bash
 git clone https://github.com/yummy342/freemodel-mcp.git
@@ -156,8 +165,8 @@ The skill adds: subscription priority routing, platform health sorting, quota ex
 
 ## What you need
 
-1. A FreeModel API key ([get one here](https://model.leyijian.com))
-2. Add platform keys in the dashboard (DeepSeek, Alibaba, etc.)
+1. A FreeModel API key ([get one here](https://freemodel.online/console))
+2. Attach at least one provider key in the console at [freemodel.online/console](https://freemodel.online/console). This router picks among **the providers you attached** — with none attached the tools reply `No platforms configured`.
 3. Node.js ≥ 18
 
 That's it. No API keys in config files — everything lives in your FreeModel account, encrypted.
@@ -172,9 +181,8 @@ This is a local relay. Prompts go from your machine → FreeModel API → target
 
 ## The data
 
-All tier scores, benchmark results, and data sources are public:
-
-→ [model.leyijian.com/classification.html](https://model.leyijian.com/classification.html)
+The model list the router reads is public and needs no key:
+→ [https://freemodel.online/v1/models](https://freemodel.online/v1/models)
 
 ---
 
