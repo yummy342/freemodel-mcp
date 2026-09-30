@@ -1,7 +1,7 @@
 {
   "name": "freemodel-mcp",
-  "version": "1.0.5",
-  "description": "Task-aware model router for Claude Code: pick the model by what the task is, not by price. Routes across the providers attached to your FreeModel account, with one API key.",
+  "version": "2.0.0",
+  "description": "MCP server for the FreeModel gateway: browse the model catalogue, inspect tier and account status, and send a prompt. Works with a plain gateway key.",
   "main": "server.js",
   "bin": {
     "freemodel-mcp": "server.js"
@@ -49,7 +49,6 @@
   },
   "files": [
     "server.js",
-    "skill.md",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"

@@ -1,99 +1,33 @@
 # FreeModel MCP
 
-**Stop paying Claude prices for every task. Route coding to DeepSeek, reasoning to Qwen, writing to Gemini — automatically. One API key, 25+ platforms, the right model every time.**
+An MCP server for the [FreeModel](https://freemodel.online) gateway: look up the model catalogue, see what your key is allowed to call, and send a prompt — from inside Claude Code or any other MCP client.
 
 ```bash
 npx freemodel-mcp
 ```
 
-FreeModel is a **model router for Claude Code**. It looks at what you're doing — writing code, analyzing data, translating text — and picks the best model for that specific task. Not just the cheapest. Not just the most popular. The one that actually scores highest on the relevant benchmarks.
+## The four tools
 
----
+| Tool | Calls | Key needed |
+|---|---|---|
+| `freemodel_models` | `GET /v1/models` | no — the catalogue is public |
+| `freemodel_tiers` | `GET /v1/tiers` | yes |
+| `freemodel_account` | `GET /v1/me` | yes |
+| `freemodel_chat` | `POST /v1/chat/completions` | yes |
 
-## Why this exists
+**`freemodel_models`** — the catalogue, the same endpoint the counts on the site are derived from. Filter by modality (`chat`, `image`, `video`, `tts`, `asr`, `embedding`, `rerank`) or by id substring.
 
-Every model router does the same thing: "route cheap prompts to cheap models." They classify by complexity (simple → Haiku, complex → Opus) and call it a day.
+**`freemodel_tiers`** — the three tier aliases and what is in each band: `fm-v1-lite` (free, any account), `fm-v1-standard`, `fm-v1-pro`. These are pools rather than single models: asking for a tier means "any model in this band", which is what lets a request survive one provider going down.
 
-FreeModel answers a different question: **which model actually performs well on this type of task?**
+**`freemodel_account`** — subscriptions and when they expire, which tiers this key may call, usage so far.
 
-```
-Other routers:                FreeModel:
-"How hard is this?"           "What kind of task is this?"
-         ↓                              ↓
-  simple / medium / hard        coding / reasoning / writing
-         ↓                              ↓
-  pick cheaper model            pick model that scores highest
-  at same complexity            on this task type's benchmarks
-```
-
-The difference is data. FreeModel scores every model across six dimensions (Code, Knowledge, Math, Instruction, Safety, Efficiency) using 18 public benchmarks — LiveCodeBench, MMLU-Pro, MATH-500, IFEval, SimpleQA, and more. The live model list this router reads is public and needs no key: `GET https://freemodel.online/v1/models`.
-
----
-
-## vs. the alternatives
-
-| | mcp-multi-model | claude-code-llm-router | llm-routing | **FreeModel** |
-|---|---|---|---|---|
-| Routing logic | keyword match in yaml | complexity regression | confidence score | **6-dim benchmark scores** |
-| Task types | none | simple/medium/hard | none | **coding, reasoning, writing, chat, creative, multimodal** |
-| Model catalog | 12 platforms, manual config | 20 platforms, auto-detect | 20 platforms | **25 platforms, 982 models** |
-| Why this model? | "you configured it" | "complexity match" | "confidence score" | **"scores 92 on coding benchmarks"** |
-| Tier system | no | no | no | **L1–L5, public rubric** |
-| Subscription routing | no | no | no | **yes, auto-prioritizes paid subs** |
-| Pricing | static yaml | static | static | **live API prices** |
-| Data transparency | N/A | N/A | N/A | **public model list** |
-
----
-
-## How it works
-
-### Tier system (L1–L5)
-
-Every model gets a tier based on six-dimension benchmark scores — not marketing copy, not vibes.
-
-| Tier | Label | Threshold | Example |
-|------|-------|-----------|---------|
-| L1 | Specialist | single-dim excellence | DeepSeek-R1 (Reasoning 95) |
-| L2 | Professional | ≥70 composite | Claude Opus 4, GPT-5 |
-| L3 | Competent | ≥55 composite | Qwen3-Max, DeepSeek-V4 |
-| L4 | Capable | ≥35 composite | GLM-4-Flash, ERNIE-Speed |
-| L5 | Basic | <35 composite | Small/fast models |
-
-### Task auto-detection
-
-6 task types detected from the user's prompt before routing:
-
-- **coding** — 写代码、debug、爬虫、API、build、修复
-- **reasoning** — 分析、数学、架构、安全审计、规划
-- **writing** — 翻译、写作、总结、报告、文档
-- **creative** — 头脑风暴、命名、设计、营销
-- **chat** — 问答、推荐、对比、讨论 (default)
-- **multimodal** — 图片、OCR、视频
-
-Task type → filter to models that score well on relevant benchmarks → pick best price/performance.
-
-### Scoring dimensions
-
-```
-Code ────────── LiveCodeBench, SWE-bench, HumanEval
-Knowledge ───── MMLU-Pro, GPQA Diamond
-Math ────────── MATH-500, AIME 2024
-Instruction ─── IFEval, MT-Bench
-Safety ──────── SimpleQA, TruthfulQA
-Efficiency ──── speed, throughput, cost
-```
-
-18 data sources, 6 dimensions.
-
----
+**`freemodel_chat`** — one prompt, one answer. Defaults to `fm-v1-lite`; pass any id from `freemodel_models` to pin a specific model.
 
 ## Quick start
 
-Get a key at [freemodel.online](https://freemodel.online/console) → API keys.
+Get a key at [freemodel.online/console](https://freemodel.online/console) → API keys.
 
-### Option 1: npx (Claude Code, recommended)
-
-Add to `~/.claude/mcp.json`:
+### Claude Code (npx)
 
 ```json
 {
@@ -101,24 +35,20 @@ Add to `~/.claude/mcp.json`:
     "freemodel": {
       "command": "npx",
       "args": ["-y", "freemodel-mcp"],
-      "env": {
-        "FREEMODEL_KEY": "sk-your-key"
-      }
+      "env": { "FREEMODEL_KEY": "sk-your-key" }
     }
   }
 }
 ```
 
-### Option 2: Codex CLI
-
-Set environment variables or configure in `~/.codex/config.toml`:
+### Codex CLI
 
 ```
 OPENAI_BASE_URL = https://freemodel.online/v1
 OPENAI_API_KEY  = sk-your-key
 ```
 
-### Option 3: git clone (Claude Code)
+### From source
 
 ```bash
 git clone https://github.com/yummy342/freemodel-mcp.git
@@ -131,60 +61,26 @@ cd freemodel-mcp && npm install
     "freemodel": {
       "command": "node",
       "args": ["/path/to/freemodel-mcp/server.js"],
-      "env": {
-        "FREEMODEL_KEY": "sk-your-key"
-      }
+      "env": { "FREEMODEL_KEY": "sk-your-key" }
     }
   }
 }
 ```
 
----
+## Configuration
 
-## MCP Tools
+| Variable | Default | Meaning |
+|---|---|---|
+| `FREEMODEL_KEY` | — | Your gateway key. Only the keyed tools need it. |
+| `FREEMODEL_API` | `https://freemodel.online/v1` | API root. Change it to point at another deployment. |
 
-| Tool | What it does |
-|------|-------------|
-| `freemodel_key_health` | Subscription status, platform health, recommended model |
-| `freemodel_status` | Session summary: active model, healthy count |
-| `freemodel_models` | List your available platforms and models |
-| `freemodel_recommend` | Describe a task → get 2-3 model picks with reasons |
-| `freemodel_run` | Execute on a specific model (platform + model name) |
+The free tier needs no card. `fm-v1-standard` and `fm-v1-pro` need a subscription, which is bought on the account portal at [alli.website](https://alli.website/) — without it those calls are refused with a 402, never billed silently.
 
-### With the skill (recommended)
+## What this package does not do
 
-Install the Claude Code skill for full auto-routing:
-
-1. Copy `skill.md` to `~/.claude/skills/freemodel/skill.md`
-2. Claude Code auto-loads it on startup
-3. Every task is auto-classified → routed to the best model → executed
-
-The skill adds: subscription priority routing, platform health sorting, quota exhaustion prevention, task-type auto-detection, and model fallback chains.
-
----
-
-## What you need
-
-1. A FreeModel API key ([get one here](https://freemodel.online/console))
-2. Attach at least one provider key in the console at [freemodel.online/console](https://freemodel.online/console). This router picks among **the providers you attached** — with none attached the tools reply `No platforms configured`.
-3. Node.js ≥ 18
-
-That's it. No API keys in config files — everything lives in your FreeModel account, encrypted.
-
----
-
-## Privacy
-
-This is a local relay. Prompts go from your machine → FreeModel API → target platform. No telemetry, no analytics. Your platform API keys stay encrypted in your FreeModel account.
-
----
-
-## The data
-
-The model list the router reads is public and needs no key:
-→ [https://freemodel.online/v1/models](https://freemodel.online/v1/models)
-
----
+- **No routing across your own provider keys.** Version 1.x called the `/api/gateway/agent/*` endpoints, which pick among the provider keys attached to an account and answer `No platforms configured` when none are attached. This package talks to the gateway's own catalogue and tiers instead, so a plain key is enough.
+- **No streaming yet.** `freemodel_chat` waits for the full answer.
+- **No embeddings or image calls.** Those exist on the gateway (`auto/embed`, `auto/image`, and the rest), but this package does not wrap them.
 
 ## License
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.0.0 (2026-09-30)
+
+Rewritten against the gateway's own public API. Version 1.x called `/api/gateway/agent/*`,
+which on the international deployment is BYOK-only: it picks among the provider keys attached
+to an account and answers `No platforms configured` when none are attached, so a plain
+gateway key could not use it. The tools are now:
+
+- `freemodel_models` — `GET /v1/models`. Public, no key needed.
+- `freemodel_tiers` — `GET /v1/tiers`. The fm-v1-lite / standard / pro bands and what is in them.
+- `freemodel_account` — `GET /v1/me`. Subscriptions, expiry, allowed tiers, usage.
+- `freemodel_chat` — `POST /v1/chat/completions`. One prompt, one answer.
+
+Breaking: the five 1.x tool names are gone. `skill.md` documented them and is no longer
+published with the package (it remains in the repository for reference).
+
 ## 1.0.5 (2026-09-30)
 
 - Default API base moved to https://freemodel.online/api/gateway. The previous default,

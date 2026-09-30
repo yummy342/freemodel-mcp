@@ -1,299 +1,209 @@
 #!/usr/bin/env node
-// FreeModel MCP Server — thin wrapper around FreeModel Agent API
-// Usage: Add to Claude Code mcp.json, then use tools directly
-// SDK v1.29.0 compatible: McpServer + registerTool + Zod
+/* FreeModel MCP Server — international gateway (freemodel.online)
+ *
+ * 这一版只打国际站真实存在的接口，五个工具全部能被一个普通 key 走通：
+ *   GET  /v1/models            免鉴权，公开目录（199 条，含模态与上下文长度）
+ *   GET  /v1/tiers              需 key，三档（lite/standard/pro）与档内模型
+ *   GET  /v1/me                 需 key，订阅、档位权限、用量
+ *   POST /v1/chat/completions   需 key，OpenAI 格式对话
+ *
+ * 与 1.x 的区别：1.x 打的是 /api/gateway/agent/*，那套在国际站是 **BYOK-only**
+ * （按账号绑定的 provider key 选模型，没绑就回 No platforms configured）。
+ * 这里改成打国际站自己的产品面：档位别名 fm-v1-lite/standard/pro + 公开目录。
+ *
+ * 配置：FREEMODEL_KEY（在 freemodel.online/console 取）
+ *       FREEMODEL_API（可选，默认 https://freemodel.online/v1）
+ */
 
 const { McpServer } = require('@modelcontextprotocol/sdk/server/mcp.js');
 const { StdioServerTransport } = require('@modelcontextprotocol/sdk/server/stdio.js');
 const z = require('zod');
-const fs = require('fs');
-const path = require('path');
 
-const SIGNAL_PATH = path.join(process.cwd(), '.freemodel_cleared');
-
-const API_BASE = process.env.FREEMODEL_API || 'https://freemodel.online/api/gateway';
+const API_ROOT = String(process.env.FREEMODEL_API || 'https://freemodel.online/v1').replace(/\/+$/, '');
 const API_KEY = process.env.FREEMODEL_KEY || '';
+const TIMEOUT_MS = 30000;
 
 const server = new McpServer(
-  { name: 'freemodel-mcp', version: '1.0.0' },
+  { name: 'freemodel-mcp', version: '2.0.0' },
   { capabilities: { tools: {} } }
 );
 
-// ── freemodel_key_health ──
-server.registerTool(
-  'freemodel_key_health',
-  {
-    description: 'Check API key health: subscription status, platform health, and recommended model. Use FIRST before task routing.',
-    inputSchema: {}
-  },
-  async () => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first.' }] };
-    try {
-      const r = await fetch(API_BASE + '/key-health?api_key=' + encodeURIComponent(API_KEY), {
-        signal: AbortSignal.timeout(15000)
-      });
-      const d = await r.json();
-      if (d.code !== 200) return { content: [{ type: 'text', text: 'Error: ' + (d.msg || d.code) }] };
-
-      // Live key-health returns an object: {mcp, api, subscriptions[], platforms_available, recommend, top_platform}
-      const data = d.data || {};
-      const subs = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-      // API returns subscriptions array directly — no nested .recommend or .top_platform
-      const sorted = [...subs].sort((a, b) => (a.priority || 99) - (b.priority || 99));
-      const top = sorted[0] || null;
-      const isSub = subs.length > 0;
-
-      let text = `Key Health: ${data.mcp ? '🟢 MCP' : '⚫ MCP'} | API ok | ${data.platforms_available || 0} platform keys\n`;
-      text += `Plan: ${isSub ? 'subscription' : 'free'}\n`;
-      if (top) {
-        text += `Top Subscription: ${top.platform} (priority ${top.priority})\n`;
-        text += `Expires: ${top.expires_at || 'never'}\n`;
-        text += `Task types: ${top.task_types || 'all'}\n`;
-      }
-      if (subs.length) {
-        text += `\n--- All Subscriptions ---\n`;
-        subs.sort((a, b) => (a.priority || 99) - (b.priority || 99))
-          .forEach(s => { text += `• ${s.platform} (prio ${s.priority}${s.expires_at ? ', exp ' + s.expires_at : ', never'})\n`; });
-      }
-
-      return { content: [{ type: 'text', text }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
+/* ── 统一请求：把 HTTP 层面的失败也翻成人能读的话 ──────────────── */
+async function api(path, { method = 'GET', body, auth = false } = {}) {
+  const headers = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (auth) {
+    if (!API_KEY) {
+      return { ok: false, text: 'FREEMODEL_KEY is not set. Create a key at https://freemodel.online/console and put it in the server env.' };
     }
+    headers['Authorization'] = 'Bearer ' + API_KEY;
   }
-);
-
-// ── freemodel_status ──
-server.registerTool(
-  'freemodel_status',
-  {
-    description: 'Get FreeModel session summary: active model, platform, subscription, healthy count.',
-    inputSchema: {}
-  },
-  async () => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first.' }] };
-    try {
-      const r = await fetch(API_BASE + '/key-health?api_key=' + encodeURIComponent(API_KEY), {
-        signal: AbortSignal.timeout(15000)
-      });
-      const d = await r.json();
-      if (d.code !== 200) return { content: [{ type: 'text', text: 'Error: ' + (d.msg || d.code) }] };
-
-      const data = d.data || {};
-      const subs = Array.isArray(data.subscriptions) ? data.subscriptions : [];
-      const sorted = [...subs].sort((a, b) => (a.priority || 99) - (b.priority || 99));
-      const top = sorted[0] || null;
-      const isSub = subs.length > 0;
-
-      let text = `── FreeModel Session ──\n`;
-      text += `Plan: ${isSub ? 'subscription' : 'free'}\n`;
-      text += `Subscriptions: ${subs.length ? subs.map(s => s.platform + '(P' + s.priority + ')').join(', ') : 'none'}\n`;
-      text += `Active: ${top ? top.platform + ' (P' + top.priority + ')' : 'auto'}\n`;
-      text += `Top expires: ${top?.expires_at || 'never'}\n`;
-      text += `Keys: ${data.platforms_available || 0} platforms\n`;
-
-      return { content: [{ type: 'text', text }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
-    }
+  let r;
+  try {
+    r = await fetch(API_ROOT + path, {
+      method, headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(TIMEOUT_MS)
+    });
+  } catch (e) {
+    return { ok: false, text: `Could not reach ${API_ROOT}${path} (${e.name === 'TimeoutError' ? 'timed out' : e.message}). Check FREEMODEL_API.` };
   }
-);
+  const raw = await r.text();
+  let json = null;
+  try { json = JSON.parse(raw); } catch { /* 非 JSON：原样带出去 */ }
+  if (!r.ok) {
+    const detail = (json && ((json.error && json.error.message) || json.msg)) || raw.slice(0, 300);
+    const hint = r.status === 401
+      ? ' The key was rejected — check FREEMODEL_KEY, and that the email on the account has been verified.'
+      : r.status === 404 ? ' Route not found — check FREEMODEL_API.' : '';
+    return { ok: false, text: `HTTP ${r.status}: ${detail}${hint}` };
+  }
+  return { ok: true, json, raw };
+}
 
-// ── freemodel_models ──
+const text = t => ({ content: [{ type: 'text', text: t }] });
+const num = v => (v === null || v === undefined ? '—' : v);
+
+/* ── 1. 目录：公开，不需要 key ─────────────────────────────── */
 server.registerTool(
   'freemodel_models',
   {
-    description: 'List all AI models available to you across platforms. Returns platform and model names.',
+    description: 'List the model catalogue on freemodel.online. Public endpoint, no API key needed. Filter by modality or search text.',
+    inputSchema: {
+      modality: z.enum(['chat', 'image', 'video', 'tts', 'asr', 'embedding', 'rerank']).optional()
+        .describe('Only return this modality'),
+      search: z.string().optional().describe('Only return ids containing this text'),
+      limit: z.number().int().min(1).max(200).optional().describe('Max rows to print (default 40)')
+    }
+  },
+  async ({ modality, search, limit }) => {
+    const r = await api('/models');
+    if (!r.ok) return text(r.text);
+    const all = (r.json && r.json.data) || [];
+    const byModality = {};
+    for (const m of all) byModality[m.modality || '?'] = (byModality[m.modality || '?'] || 0) + 1;
+
+    let rows = all;
+    if (modality) rows = rows.filter(m => m.modality === modality);
+    if (search) rows = rows.filter(m => String(m.id).includes(search));
+    const shown = rows.slice(0, limit || 40);
+
+    let out = `Catalogue: ${all.length} models — ` +
+      Object.entries(byModality).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ') + '\n';
+    out += `Matching this filter: ${rows.length}${rows.length > shown.length ? ` (showing ${shown.length})` : ''}\n\n`;
+    for (const m of shown) {
+      out += `• ${m.id}  [${m.modality || '?'}${m.tier ? ', tier ' + m.tier : ''}` +
+        `${m.context_length ? ', ' + m.context_length + ' ctx' : ''}]\n`;
+    }
+    out += '\nCall any id directly, or use a tier alias: fm-v1-lite (free), fm-v1-standard, fm-v1-pro.';
+    return text(out);
+  }
+);
+
+/* ── 2. 档位：需 key ─────────────────────────────────────── */
+server.registerTool(
+  'freemodel_tiers',
+  {
+    description: 'Show the three subscription tiers (lite / standard / pro): model counts, examples, and which ones this key is allowed to call.',
     inputSchema: {}
   },
   async () => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first. Get key from https://freemodel.online/console' }] };
-    try {
-      const r = await fetch(API_BASE + '/agent/models?api_key=' + encodeURIComponent(API_KEY));
-      const d = await r.json();
-      if (d.code !== 200) return { content: [{ type: 'text', text: 'Error: ' + (d.msg || d.code) }] };
-      const platforms = d.data.platforms.join(', ');
-      const lines = d.data.models.slice(0, 30).map(m => `${m.provider}: ${m.model_name} (${m.model_type})`).join('\n');
-      return { content: [{ type: 'text', text: `Platforms: ${platforms}\n\nModels:\n${lines}` }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
+    const r = await api('/tiers', { auth: true });
+    if (!r.ok) return text(r.text);
+    const rows = (r.json && r.json.data) || [];
+    if (!rows.length) return text('The tiers endpoint returned nothing.');
+    let out = 'Tiers (fm-v1-*):\n\n';
+    for (const t of rows) {
+      out += `• fm-v1-${t.tier}: ${num(t.own)} models in this band, ${num(t.total)} in total counting inherited ones\n`;
+      if (t.examples && t.examples.length) out += `  examples: ${t.examples.slice(0, 4).join(', ')}\n`;
     }
+    const mods = (r.json && r.json.modalities) || null;
+    if (mods) {
+      out += `\nNon-chat modalities are reachable by route, not by tier: ` +
+        Object.entries(mods.byModality || {}).map(([k, v]) => `${k} ${v}`).join(', ') + '\n';
+      out += 'Routes: ' + (mods.aliases || []).map(a => a.name).join(', ') + '\n';
+    }
+    out += '\nlite is free for any account; standard and pro need a subscription.';
+    return text(out);
   }
 );
 
-// ── freemodel_recommend ──
+/* ── 3. 账号：需 key ─────────────────────────────────────── */
 server.registerTool(
-  'freemodel_recommend',
+  'freemodel_account',
   {
-    description: 'Recommend the best AI model for a given task. Analyzes your task and recommends 2-3 models with reasons.',
-    inputSchema: { task: z.string().describe('Task description e.g. "写一个Python爬虫"') }
+    description: 'Account status for this key: subscriptions and expiry, which tiers are callable, and usage so far.',
+    inputSchema: {}
   },
-  async (args) => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first.' }] };
-    try {
-      const r = await fetch(API_BASE + '/agent/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_key: API_KEY, task: args.task })
-      });
-      const d = await r.json();
-      if (d.code !== 200) return { content: [{ type: 'text', text: 'Error: ' + (d.msg || d.code) }] };
-      const recs = d.data.recommendations.map((r, i) =>
-        `${i + 1}. ${r.provider}/${r.model} — ${r.reason} (${r.price_note})`
-      ).join('\n');
-      return { content: [{ type: 'text', text: `Task: ${args.task}\n\nRecommendations:\n${recs}` }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
+  async () => {
+    const r = await api('/me', { auth: true });
+    if (!r.ok) return text(r.text);
+    const d = r.json || {};
+    let out = `Account: ${d.name || '(unnamed)'}   key ${d.key_masked || ''}\n`;
+
+    const subs = d.subscriptions || {};
+    const keys = Object.keys(subs);
+    if (!keys.length) {
+      out += 'Subscriptions: none — free tier only (fm-v1-lite).\n';
+    } else {
+      out += 'Subscriptions:\n';
+      for (const k of keys) {
+        const s = subs[k] || {};
+        out += `• ${k}: ${s.active ? 'active' : 'expired'}` +
+          (s.active && s.days_left != null ? `, ${s.days_left} days left` : '') +
+          `${s.expires_at ? `, expires ${String(s.expires_at).slice(0, 10)}` : ''}\n`;
+      }
     }
+
+    const tiers = d.tiers || {};
+    const allowed = Object.keys(tiers).filter(t => tiers[t] && tiers[t].allowed);
+    out += `Callable tiers: ${allowed.length ? allowed.join(', ') : 'none'}\n`;
+
+    const u = (d.usage && d.usage.total) || {};
+    out += `Usage since ${d.since ? String(d.since).slice(0, 10) : '—'}: ` +
+      `${num(u.calls)} calls, ${num(u.tokens)} tokens\n`;
+
+    const mods = d.modalities || {};
+    if (mods.total) out += `Modal endpoints available: ${mods.total}\n`;
+    return text(out);
   }
 );
 
-// ── freemodel_route ── Auto-classify task → pick best model → execute
+/* ── 4. 对话：需 key ─────────────────────────────────────── */
 server.registerTool(
-  'freemodel_route',
+  'freemodel_chat',
   {
-    description: 'Auto-route a task: classify task type, pick the best model via scoring engine, execute it. One-step smart routing — no need to manually choose platform/model.',
+    description: 'Send one prompt to the gateway and return the answer. Defaults to the free tier (fm-v1-lite); pass a concrete model id from freemodel_models to pin one.',
     inputSchema: {
-      task: z.string().describe('The task to execute'),
-      system: z.string().optional().describe('System prompt (optional)'),
-      temperature: z.number().optional().describe('Temperature (default 0.7)'),
-      max_tokens: z.number().optional().describe('Max output tokens'),
-      task_type: z.string().optional().describe('Force task type: coding/reasoning/writing/creative/chat/multimodal/longform/embedding. Auto-detected if omitted.'),
-      preset: z.enum(['balanced','quality-first','budget','subscription']).optional().describe('Scoring preset (default balanced)')
+      prompt: z.string().describe('The user message'),
+      model: z.string().optional().describe('Model id or tier alias. Default fm-v1-lite'),
+      system: z.string().optional().describe('Optional system prompt'),
+      max_tokens: z.number().int().min(1).max(32000).optional().describe('Max output tokens (default 1024)')
     }
   },
-  async (args) => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first.' }] };
-    try {
-      // Step 1: Get recommendations
-      var recBody = { api_key: API_KEY, task: args.task };
-      if (args.task_type) recBody.task_type = args.task_type;
-      if (args.preset) recBody.preset = args.preset;
-      var recRes = await fetch(API_BASE + '/agent/recommend', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(recBody),
-        signal: AbortSignal.timeout(15000)
-      });
-      var recData = await recRes.json();
-      if (recData.code !== 200) return { content: [{ type: 'text', text: 'Recommend error: ' + (recData.msg || recData.code) }] };
+  async ({ prompt, model, system, max_tokens }) => {
+    const messages = [];
+    if (system) messages.push({ role: 'system', content: system });
+    messages.push({ role: 'user', content: prompt });
 
-      var picks = recData.data.recommendations || [];
-      if (!picks.length) return { content: [{ type: 'text', text: 'No suitable model found for this task.' }] };
+    const r = await api('/chat/completions', {
+      method: 'POST', auth: true,
+      body: { model: model || 'fm-v1-lite', messages, max_tokens: max_tokens || 1024 }
+    });
+    if (!r.ok) return text(r.text);
 
-      var best = picks[0];
-      var taskType = recData.data.task_type || 'chat';
-      var taskTier = recData.data.task_tier || 'L2';
-
-      // Step 2: Execute with best model
-      var runBody = {
-        api_key: API_KEY, platform: best.provider, model: best.model,
-        system: args.system || '', task: args.task,
-        temperature: args.temperature || 0.7,
-        task_type: taskType
-      };
-      if (args.max_tokens != null) runBody.max_tokens = args.max_tokens;
-
-      var runRes = await fetch(API_BASE + '/agent/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(runBody),
-        signal: AbortSignal.timeout(120000)
-      });
-      var runData = await runRes.json();
-      if (runData.code !== 200) return { content: [{ type: 'text', text: 'Run error: ' + (runData.msg || runData.code) }] };
-
-      var reply = runData.data.reply || '';
-      var reasoning = runData.data.reasoning || '';
-      var tierWarn = runData.data.tier_warn;
-
-      // Build output with routing metadata
-      var meta = `[Routed] ${taskType}/${taskTier} → ${best.provider}/${best.model} (score: ${best.composite}, tier: ${best.tier || 'N/A'})`;
-      if (tierWarn) meta += `\n[Warning] ${tierWarn.msg}`;
-
-      var text = meta + '\n\n';
-      if (reasoning) text += '[Thinking]\n' + reasoning + '\n\n[Response]\n' + reply;
-      else text += reply;
-
-      // Signal cleared for downstream tools
-      try { fs.writeFileSync(SIGNAL_PATH, String(Date.now())); } catch (e) {}
-      return { content: [{ type: 'text', text }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
-    }
+    const d = r.json || {};
+    const choice = (d.choices && d.choices[0]) || {};
+    const body = (choice.message && choice.message.content) || '(empty answer)';
+    let out = body;
+    if (d.usage) out += `\n\n— ${d.model || model || 'fm-v1-lite'}: ${d.usage.prompt_tokens || 0} in / ${d.usage.completion_tokens || 0} out`;
+    if (choice.finish_reason && choice.finish_reason !== 'stop') out += ` (finish_reason: ${choice.finish_reason})`;
+    return text(out);
   }
 );
 
-// ── freemodel_run ──
-server.registerTool(
-  'freemodel_run',
-  {
-    description: 'Execute a task using a specific AI model from a specific platform. Uses your stored API keys.',
-    inputSchema: {
-      platform: z.string().describe('Platform ID: "stepfun","baidu","zhipu","aliyun","silicon","openrouter" etc.'),
-      model: z.string().describe('Model e.g. "step-3.7-flash"'),
-      task: z.string().describe('The task to execute'),
-      system: z.string().optional().describe('System prompt (optional)'),
-      temperature: z.number().optional().describe('Temperature (default 0.7)'),
-      max_tokens: z.number().optional().describe('Max output tokens. Default varies by platform. Set 4000+ for reasoning models to prevent empty output.'),
-      reasoning_effort: z.enum(['low','medium','high']).optional().describe('Reasoning depth for step-3.7-flash. low=faster, high=deeper.')
-    }
-  },
-  async (args) => {
-    if (!API_KEY) return { content: [{ type: 'text', text: 'Set FREEMODEL_KEY env var first.' }] };
-    try {
-      var body = {
-        api_key: API_KEY, platform: args.platform, model: args.model,
-        system: args.system || '', task: args.task,
-        temperature: args.temperature || 0.7
-      };
-      if (args.max_tokens != null) body.max_tokens = args.max_tokens;
-      if (args.reasoning_effort) body.reasoning_effort = args.reasoning_effort;
-
-      const r = await fetch(API_BASE + '/agent/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      const d = await r.json();
-      if (d.code !== 200) return { content: [{ type: 'text', text: 'Error: ' + (d.msg || d.code) }] };
-      var reply = d.data.reply || '';
-      var reasoning = d.data.reasoning || '';
-      var text = reply;
-      if (reasoning) text = '[Thinking]\n' + reasoning + '\n\n[Response]\n' + reply;
-      // 路由成功：写 freemodel_cleared 信号，放行后续脑力工具 (R1.5)
-      try { fs.writeFileSync(SIGNAL_PATH, String(Date.now())); } catch (e) {}
-      return { content: [{ type: 'text', text: text }] };
-    } catch (e) {
-      return { content: [{ type: 'text', text: 'Network error: ' + e.message }] };
-    }
-  }
-);
-
-// ── Skill auto-install ──
-function installSkill() {
-  const os = require('os');
-  const skillDir = path.join(os.homedir(), '.claude', 'skills', 'freemodel');
-  const skillFile = path.join(skillDir, 'SKILL.md');
-  if (fs.existsSync(skillFile)) return;  // already installed
-
-  const src = path.join(__dirname, 'skill.md');
-  if (!fs.existsSync(src)) return;  // bundled skill.md not found
-
-  try {
-    fs.mkdirSync(skillDir, { recursive: true });
-    fs.copyFileSync(src, skillFile);
-    process.stderr.write('[freemodel] Skill installed: ' + skillFile + '\n');
-  } catch (e) {
-    // silent — permission issues or read-only fs should not block MCP startup
-  }
-}
-
-// ── Start ──
-async function main() {
-  installSkill();
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-}
-
-main().catch(console.error);
+const transport = new StdioServerTransport();
+server.connect(transport).catch((e) => {
+  console.error('freemodel-mcp: failed to start —', e && e.message ? e.message : e);
+  process.exit(1);
+});
